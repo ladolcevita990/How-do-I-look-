@@ -2,16 +2,16 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
+    // Allow any Supabase project's storage CDN. Users configure which one
+    // via NEXT_PUBLIC_SUPABASE_URL, so we can't hardcode a single hostname.
     remotePatterns: [
       {
-        protocol: "http",
-        hostname: "localhost",
-        port: "8000",
+        protocol: "https",
+        hostname: "*.supabase.co",
       },
       {
-        protocol: "http",
-        hostname: "localhost",
-        port: "9000",
+        protocol: "https",
+        hostname: "*.supabase.in",
       },
     ],
   },

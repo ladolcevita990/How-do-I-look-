@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getFileUrl, getSharedOutfit } from "@/lib/api";
+import { getSharedOutfit } from "@/lib/api";
 import type { SavedOutfit } from "@/lib/types";
 
 export default function SharedOutfitPage({
@@ -61,7 +61,7 @@ export default function SharedOutfitPage({
               {outfit.result_url && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={getFileUrl(outfit.result_url)}
+                  src={outfit.result_url}
                   alt={outfit.name}
                   className="w-full object-contain"
                 />

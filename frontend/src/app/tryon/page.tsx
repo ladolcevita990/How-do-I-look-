@@ -1,50 +1,62 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import TryOnResult from "@/components/TryOnResult";
-import { useOutfitPoll } from "@/hooks/useTryOn";
+import { saveOutfit } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
-import { getFileUrl, saveOutfit } from "@/lib/api";
 
-function TryOnContent() {
+export default function TryOnPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const jobId = searchParams.get("job");
-  const photoUrl = useAppStore((s) => s.photoUrl);
-  const addSavedOutfit = useAppStore((s) => s.addSavedOutfit);
 
-  const { status } = useOutfitPoll(jobId);
+  const hydrated = useAppStore((s) => s.hydrated);
+  const photoUrl = useAppStore((s) => s.photoUrl);
+  const resultUrl = useAppStore((s) => s.resultUrl);
+  const resultBlob = useAppStore((s) => s.resultBlob);
+  const resultItems = useAppStore((s) => s.resultItems);
+  const resultLoading = useAppStore((s) => s.resultLoading);
+  const addSavedOutfit = useAppStore((s) => s.addSavedOutfit);
 
   const [saving, setSaving] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saved, setSaved] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  if (!photoUrl) {
-    if (typeof window !== "undefined") {
+  // If the user lands on this page directly (no blob in memory), bounce
+  // back to the builder.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!photoUrl) {
       router.push("/upload");
+      return;
     }
-    return null;
+    if (!resultUrl && !resultLoading) {
+      router.push("/catalog");
+    }
+  }, [hydrated, photoUrl, resultUrl, resultLoading, router]);
+
+  if (!hydrated || !photoUrl) {
+    return (
+      <main className="min-h-screen bg-neutral-50 flex items-center justify-center text-neutral-500 text-sm">
+        Loading…
+      </main>
+    );
   }
 
-  const isLoading =
-    !status || status.status === "queued" || status.status === "processing";
-  const resultUrl = status?.result_url || null;
-  const error = status?.status === "failed" ? status.error : null;
-
   const handleSave = async () => {
-    if (!jobId) return;
+    if (!resultBlob) return;
     setSaving(true);
+    setSaveError(null);
     try {
-      const o = await saveOutfit(jobId, saveName || "Untitled look");
+      const o = await saveOutfit(resultBlob, saveName || "Untitled look", resultItems);
       addSavedOutfit(o);
       setSaved(true);
       if (typeof window !== "undefined") {
         setShareUrl(`${window.location.origin}/o/${o.share_id}`);
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save outfit");
     } finally {
       setSaving(false);
     }
@@ -89,7 +101,7 @@ function TryOnContent() {
             Your look
           </h2>
           <p className="text-neutral-600">
-            {isLoading
+            {resultLoading
               ? "Compositing your outfit…"
               : resultUrl
                 ? "Slide to compare with the original"
@@ -98,13 +110,12 @@ function TryOnContent() {
         </div>
 
         <TryOnResult
-          originalUrl={getFileUrl(photoUrl)}
+          originalUrl={photoUrl}
           resultUrl={resultUrl}
-          loading={isLoading}
-          error={error}
+          loading={resultLoading && !resultUrl}
         />
 
-        {!isLoading && resultUrl && !saved && (
+        {!resultLoading && resultUrl && !saved && (
           <div className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-3">
             <label className="block text-xs font-medium text-neutral-700 uppercase tracking-wide">
               Save to lookbook
@@ -119,12 +130,15 @@ function TryOnContent() {
               />
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || !resultBlob}
                 className="px-5 py-2.5 bg-neutral-900 text-white text-sm font-semibold rounded-lg hover:bg-neutral-800 disabled:opacity-50"
               >
                 {saving ? "Saving…" : "Save"}
               </button>
             </div>
+            {saveError && (
+              <p className="text-xs text-red-600">{saveError}</p>
+            )}
           </div>
         )}
 
@@ -165,19 +179,5 @@ function TryOnContent() {
         </div>
       </div>
     </main>
-  );
-}
-
-export default function TryOnPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-neutral-50 flex items-center justify-center text-neutral-500 text-sm">
-          Loading…
-        </div>
-      }
-    >
-      <TryOnContent />
-    </Suspense>
   );
 }

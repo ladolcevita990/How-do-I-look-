@@ -62,10 +62,15 @@ interface AppState {
   addSavedOutfit: (outfit: SavedOutfit) => void;
 
   // ---- try-on result ----
+  // We composite in the browser so the result is a Blob + an object URL.
+  // Until the user hits "Save to lookbook" it lives only in memory.
   resultUrl: string | null;
+  resultBlob: Blob | null;
+  resultItems: OutfitItem[];
   resultLoading: boolean;
-  setResult: (url: string | null) => void;
+  setResult: (blob: Blob | null, url: string | null, items?: OutfitItem[]) => void;
   setResultLoading: (loading: boolean) => void;
+  clearResult: () => void;
 }
 
 function cloneSlots(s: OutfitSlots): OutfitSlots {
@@ -190,7 +195,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({ savedOutfits: [outfit, ...state.savedOutfits] })),
 
   resultUrl: null,
+  resultBlob: null,
+  resultItems: [],
   resultLoading: false,
-  setResult: (url) => set({ resultUrl: url, resultLoading: false }),
+  setResult: (blob, url, items) =>
+    set((state) => {
+      // Revoke any previous object URL so we don't leak memory.
+      if (state.resultUrl && state.resultUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(state.resultUrl);
+      }
+      return {
+        resultBlob: blob,
+        resultUrl: url,
+        resultItems: items ?? state.resultItems,
+        resultLoading: false,
+      };
+    }),
   setResultLoading: (loading) => set({ resultLoading: loading }),
+  clearResult: () =>
+    set((state) => {
+      if (state.resultUrl && state.resultUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(state.resultUrl);
+      }
+      return { resultBlob: null, resultUrl: null, resultItems: [], resultLoading: false };
+    }),
 }));

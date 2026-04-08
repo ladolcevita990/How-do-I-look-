@@ -5,16 +5,19 @@ import { useEffect, useState } from "react";
 import GarmentSearch from "@/components/GarmentSearch";
 import OutfitBuilder from "@/components/OutfitBuilder";
 import { useAppStore } from "@/lib/store";
-import { createOutfit } from "@/lib/api";
+import { runTryOn } from "@/lib/api";
 
 export default function CatalogPage() {
   const router = useRouter();
+  const photoUrl = useAppStore((s) => s.photoUrl);
   const photoId = useAppStore((s) => s.photoId);
   const hydrated = useAppStore((s) => s.hydrated);
+  const closet = useAppStore((s) => s.closet);
   const getOutfitItems = useAppStore((s) => s.getOutfitItems);
+  const setResult = useAppStore((s) => s.setResult);
   const setResultLoading = useAppStore((s) => s.setResultLoading);
   const [loading, setLoading] = useState(false);
-  const [lastJobId, setLastJobId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Only redirect once the session has actually finished hydrating — otherwise
   // returning users would briefly bounce back to /upload before we know they
@@ -25,7 +28,7 @@ export default function CatalogPage() {
     }
   }, [hydrated, photoId, router]);
 
-  if (!hydrated || !photoId) {
+  if (!hydrated || !photoId || !photoUrl) {
     return (
       <main className="min-h-screen bg-neutral-50 flex items-center justify-center text-neutral-500 text-sm">
         Loading…
@@ -39,13 +42,17 @@ export default function CatalogPage() {
 
     setLoading(true);
     setResultLoading(true);
+    setError(null);
     try {
-      const res = await createOutfit(photoId, items);
-      setLastJobId(res.job_id);
-      router.push(`/tryon?job=${res.job_id}`);
-    } catch {
-      setLoading(false);
+      const blob = await runTryOn(photoUrl, closet, items);
+      const url = URL.createObjectURL(blob);
+      setResult(blob, url, items);
+      router.push("/tryon");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Try-on failed");
       setResultLoading(false);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -89,11 +96,10 @@ export default function CatalogPage() {
           {/* Desktop sidebar */}
           <div className="hidden lg:block lg:col-span-1">
             <div className="sticky top-24">
-              <OutfitBuilder
-                onTryOn={handleTryOn}
-                loading={loading}
-                lastJobId={lastJobId}
-              />
+              <OutfitBuilder onTryOn={handleTryOn} loading={loading} />
+              {error && (
+                <p className="mt-3 text-sm text-red-600">{error}</p>
+              )}
             </div>
           </div>
         </div>
@@ -102,11 +108,8 @@ export default function CatalogPage() {
       {/* Mobile bottom sheet */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] max-h-[60vh] overflow-y-auto z-20">
         <div className="p-3">
-          <OutfitBuilder
-            onTryOn={handleTryOn}
-            loading={loading}
-            lastJobId={lastJobId}
-          />
+          <OutfitBuilder onTryOn={handleTryOn} loading={loading} />
+          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
         </div>
       </div>
     </main>
