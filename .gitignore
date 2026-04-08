@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Build
+frontend/.next/
+frontend/out/
+dist/
+build/
+*.egg-info/
+
+# Storage
+data/
+minio-data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+*.egg
+*.whl
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ML models (too large for git)
+backend/ml/checkpoints/
+*.pt
+*.pth
+*.onnx
+*.safetensors
