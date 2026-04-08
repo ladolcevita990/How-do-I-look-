@@ -2,11 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import {
-  clearSession,
-  getFileUrl,
-  listSavedOutfits,
-} from "@/lib/api";
+import { clearSession, listSavedOutfits } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import type { SavedOutfit } from "@/lib/types";
 
@@ -111,7 +107,7 @@ export default function LookbookPage() {
                     {o.result_url && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={getFileUrl(o.result_url)}
+                        src={o.result_url}
                         alt={o.name}
                         className="absolute inset-0 w-full h-full object-cover"
                       />
@@ -158,7 +154,7 @@ export default function LookbookPage() {
                   {g.processed_url && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={getFileUrl(g.processed_url)}
+                      src={g.processed_url}
                       alt={g.name}
                       className="absolute inset-0 w-full h-full object-contain p-2"
                     />

@@ -1,147 +1,105 @@
 # How Do I Look?
 
-A virtual try-on web app. Upload a full-body photo of yourself, paste any product URL from any brand (Santoni, Aurelien, Suitsupply, you name it), and build complete head-to-toe outfits — clothing, shoes and accessories — to see how they look on you before you buy.
+A virtual try-on web app. Upload one full-body photo of yourself, paste any product URL from any brand (Santoni, Aurelien, Suitsupply, you name it), and build complete head-to-toe outfits — clothing, shoes and accessories — to see how they look on you before you buy.
 
-- **Realistic clothing try-on** — IDM-VTON (Replicate) or a free local PIL compositor for development.
-- **Full outfits** — upper, lower, dresses, shoes, and accessories (sunglasses, hats, watches, belts) all in one composed image.
+- **Full head-to-toe outfits** — upper, lower, dresses, shoes, and accessories (sunglasses, hats, watches, belts, ties, scarves) composed into one image.
 - **Any brand** — paste any product page URL and the scraper pulls the image, removes the background, and auto-classifies the category.
-- **Saves on return** — a long-lived signed session cookie means your photo, saved garments, and outfits are still there the next time you open the app on the same browser. No login required.
+- **Saves on return** — a per-device session id in `localStorage` means your photo, closet, and saved outfits are still there the next time you open the app on the same browser. No account, no login.
 - **Mobile first** — capture your photo with your phone camera and browse the catalog on the go.
+- **$0/month to host** — the whole thing runs on Vercel's hobby tier plus Supabase's free plan.
 
 ## Stack
 
-- **Backend:** FastAPI, SQLAlchemy (SQLite by default), MediaPipe, Pillow, rembg, Replicate client.
-- **Frontend:** Next.js 16 (App Router), React 19, Tailwind 4, Zustand, react-webcam, react-dropzone, react-compare-slider.
-- **Storage:** S3-compatible (MinIO in dev).
+- **Next.js 16** (App Router, React 19, Tailwind 4)
+- **Zustand** for client state, **SWR** for optimistic loads
+- **Supabase** — Postgres for photos / garments / outfits, Storage for images
+- **@imgly/background-removal** — runs in the browser, no server needed
+- **HTML Canvas** — outfits are composited client-side from fixed pose anchors
 
-## Getting started
+There is no backend. Two Next.js Route Handlers (`/api/scrape` and `/api/scrape/image`) exist solely to dodge browser CORS when fetching product pages and images from arbitrary brand websites.
 
-### Prerequisites
+## Quick start
 
-- Docker & Docker Compose
-- (optional) Node 20+ and Python 3.11+ if you want to run services outside Docker.
+### 1. Create a Supabase project
 
-### 1. Configure environment
+1. Sign in at <https://supabase.com> and click **New project**. Pick any region and set a strong database password — you won't need it again.
+2. Once the project is up, open **SQL Editor**, click **New query**, paste the contents of [`frontend/supabase-schema.sql`](frontend/supabase-schema.sql), and click **Run**. This creates the `photos`, `garments`, `outfits`, and `outfit_items` tables, enables row-level security with permissive policies, and creates the public `hdil` storage bucket.
+3. Open **Settings → API**. Copy the **Project URL** and the **anon public** key.
 
-```bash
-cp .env.example .env
-```
-
-The defaults work out of the box with `TRYON_BACKEND=stub` — no paid API keys required. When you're ready for photoreal try-on, set `TRYON_BACKEND=replicate` and paste a token from https://replicate.com/account/api-tokens.
-
-### 2. Start everything
+### 2. Configure the frontend
 
 ```bash
-docker compose up --build
+cp frontend/.env.example frontend/.env.local
+# then edit frontend/.env.local and paste the two Supabase values
 ```
 
-This starts:
-- `frontend` on http://localhost:3000
-- `backend` on http://localhost:8000 (Swagger UI at `/docs`)
-- `minio` on http://localhost:9000 (console on http://localhost:9001, `minioadmin` / `minioadmin`)
-
-The backend auto-creates its SQLite DB under `./data/` and auto-creates the MinIO bucket on startup.
-
-### 3. Smoke test
+### 3. Run it
 
 ```bash
-curl http://localhost:8000/api/health
-# => {"status":"ok","version":"0.1.0"}
-```
-
-Then open http://localhost:3000 and walk through: upload a photo → paste a product URL → drag items into the outfit builder → tap **Try on**.
-
-## Try-on backends
-
-| `TRYON_BACKEND` | What it does                                                         | Cost       |
-|-----------------|----------------------------------------------------------------------|------------|
-| `stub`          | Local PIL compositor. Pose-anchored regions. Rough but instant.      | Free       |
-| `replicate`     | IDM-VTON via Replicate. Photoreal results for clothing.              | ~$0.03/run |
-
-Accessories (sunglasses, hats, watches, belts) and shoes always use a local MediaPipe-anchored overlay, independent of the backend setting.
-
-## Architecture
-
-```
-frontend (Next.js)           backend (FastAPI)              storage
-──────────────────           ──────────────────              ───────
-/upload  ────────▶  POST /api/upload  ───▶ preprocessing ──▶ MinIO
-/catalog ────────▶  POST /api/garments/preview
-                    POST /api/garments/confirm ─▶ scraper ─▶ MinIO
-/tryon   ────────▶  POST /api/outfit  ──▶ compositing   ──▶ MinIO
-                                           └▶ tryon_engine (stub|replicate)
-                                           └▶ accessory_overlay (MediaPipe)
-/lookbook ───────▶  GET  /api/session/state
-```
-
-All user data is scoped by a signed HttpOnly `hdil_session` cookie (1 year lifetime). Deleting the cookie or clicking **Clear session** on `/lookbook` starts fresh.
-
-## Development
-
-Run services individually:
-
-```bash
-# backend
-cd backend
-pip install -e '.[dev]'
-uvicorn app.main:app --reload
-
-# frontend
 cd frontend
 npm install
 npm run dev
 ```
 
-Run tests:
+Open <http://localhost:3000> and walk through: upload a photo → paste a product URL → drag items into the outfit builder → tap **Try on**.
 
-```bash
-cd backend && pytest
-cd frontend && npm run build
-```
+The first background removal triggers a one-time ~40 MB model download (cached in IndexedDB afterwards).
 
-## Deploying to the internet (Render + Vercel)
+## Deploying to the internet (Vercel + Supabase)
 
-The app splits cleanly across two hosts:
+The app is one Next.js project — deploy it anywhere that runs Next 16. Vercel is the easiest path:
 
-- **Frontend** on Vercel — free, auto-deploys on every push.
-- **Backend** on Render — runs the Docker image from `backend/Dockerfile`.
-
-### 1. Push the repo to GitHub
-
-The `main` branch (or whichever branch you want to deploy) needs to live on GitHub. Both Render and Vercel pick up from there.
-
-### 2. Deploy the backend on Render
-
-1. Sign in at <https://render.com> with GitHub.
-2. Click **New +** → **Blueprint** and pick this repository. Render reads `render.yaml` and provisions a **Starter** web service with a 1 GB persistent disk mounted at `/app/data`.
-3. After the first build, open the service → **Environment** and fill in:
-   - `SESSION_COOKIE_SECRET` — any random 32+ character string (generate one with `openssl rand -hex 32`).
-   - `FRONTEND_URL` — leave blank for now; you'll set it once Vercel gives you a URL.
-   - `CORS_EXTRA_ORIGINS` — same as `FRONTEND_URL`.
-4. Click **Manual Deploy** → **Clear build cache & deploy**. Wait for the service to go green.
-5. Copy the backend URL Render assigns, e.g. `https://how-do-i-look-api.onrender.com`.
-
-### 3. Deploy the frontend on Vercel
-
-1. Sign in at <https://vercel.com> with GitHub.
-2. Click **Add New** → **Project** and pick this repository.
+1. Push this repo to GitHub.
+2. Sign in at <https://vercel.com> and click **Add New → Project**. Pick this repository.
 3. Set **Root Directory** to `frontend`.
 4. Under **Environment Variables**, add:
-   - `NEXT_PUBLIC_API_URL` = the Render URL from step 2.5 (e.g. `https://how-do-i-look-api.onrender.com`).
-5. Click **Deploy**. Vercel will give you a URL like `https://how-do-i-look.vercel.app`.
+   - `NEXT_PUBLIC_SUPABASE_URL` — from Supabase → Settings → API
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — from Supabase → Settings → API
+5. Click **Deploy**.
 
-### 4. Wire them together
+That's it. Vercel gives you a URL like `https://how-do-i-look.vercel.app`. Open it on your phone. Cost: **$0/month** forever, as long as you stay inside Vercel's hobby limits and Supabase's free tier (500 MB Postgres + 1 GB storage).
 
-Go back to Render → **Environment** and set both `FRONTEND_URL` and `CORS_EXTRA_ORIGINS` to your Vercel URL. Click **Save Changes** — Render redeploys automatically.
+## Architecture
 
-That's it. Open the Vercel URL on your phone and you should see the home page.
+```
+ browser                                      Supabase
+ ───────                                      ────────
+ /upload          ──── uploadPhoto() ─────▶  photos table + hdil/sessions/<id>/photos/
+ /catalog         ──── /api/scrape ───────▶  (server fetch to brand page)
+                  ──── /api/scrape/image ─▶  (server fetch to brand CDN)
+                  ──── background-removal ─── (on-device ONNX model)
+                  ──── confirmGarment() ──▶  garments table + hdil/sessions/<id>/garments/
+ /tryon           ──── composeOutfit() ────  (HTML canvas, in memory)
+                  ──── saveOutfit() ──────▶  outfits / outfit_items tables + hdil/sessions/<id>/outfits/
+ /lookbook        ──── getSessionState() ─▶  selects photos / garments / outfits by session_id
+ /o/[shareId]     ──── getSharedOutfit() ─▶  selects outfits by share_id
+```
 
-### Free-forever variant (optional)
+Every row is keyed by a `session_id` uuid the browser stores in `localStorage`. There are no accounts. Security comes from the session uuid being unguessable — Supabase RLS allows anonymous reads and writes on all four tables because the app has no server to authorize against.
 
-If you want $0/month instead of ~$7/month, switch the Render plan to `free` (edit `render.yaml`) and use external free services for storage and database:
+Clearing the session wipes the rows and the storage objects for that uuid, then generates a new one.
 
-- **Cloudflare R2** for files — 10 GB free, S3-compatible. Set `STORAGE_BACKEND=s3` and point `S3_ENDPOINT_URL`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET_NAME` at R2.
-- **Supabase Postgres** for the database — 500 MB free. Set `DATABASE_URL=postgresql://...` from your Supabase project.
-- Delete the `disk:` block from `render.yaml`.
+## Development
 
-Trade-off: the free Render instance sleeps after 15 minutes of inactivity and takes ~30 seconds to wake up on the next request.
+```bash
+cd frontend
+npm install
+npm run dev      # http://localhost:3000
+npm run build    # production build
+npm run lint
+```
+
+Useful files:
+
+- [`frontend/src/lib/api.ts`](frontend/src/lib/api.ts) — all data access and try-on orchestration
+- [`frontend/src/lib/tryon/composite.ts`](frontend/src/lib/tryon/composite.ts) — the canvas compositor
+- [`frontend/src/lib/tryon/pose.ts`](frontend/src/lib/tryon/pose.ts) — heuristic pose anchors
+- [`frontend/src/lib/tryon/bgremove.ts`](frontend/src/lib/tryon/bgremove.ts) — @imgly/background-removal wrapper
+- [`frontend/src/app/api/scrape/route.ts`](frontend/src/app/api/scrape/route.ts) — URL → og:image / JSON-LD scraper
+- [`frontend/supabase-schema.sql`](frontend/supabase-schema.sql) — Supabase schema + RLS policies
+
+## Roadmap
+
+- Replace heuristic pose anchors with MediaPipe Web so arbitrary poses work
+- Swap the canvas compositor for a photoreal model (IDM-VTON via Replicate) when a user opts in
+- WebGPU acceleration for background removal on supported devices

@@ -1,8 +1,6 @@
 "use client";
 
-import Image from "next/image";
 import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider";
-import { getFileUrl } from "@/lib/api";
 
 export default function TryOnResult({
   originalUrl,
@@ -76,7 +74,8 @@ export default function TryOnResult({
   if (!resultUrl) {
     return (
       <div className="bg-gray-50 rounded-2xl p-12 text-center">
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={originalUrl}
           alt="Your photo"
           width={384}
@@ -102,7 +101,7 @@ export default function TryOnResult({
           }
           itemTwo={
             <ReactCompareSliderImage
-              src={getFileUrl(resultUrl)}
+              src={resultUrl}
               alt="Try-on result"
             />
           }
@@ -121,7 +120,7 @@ export default function TryOnResult({
 
       <div className="flex gap-3 justify-center">
         <a
-          href={getFileUrl(resultUrl)}
+          href={resultUrl}
           download="howdoilook-result.jpg"
           className="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors"
         >

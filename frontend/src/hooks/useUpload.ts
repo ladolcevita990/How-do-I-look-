@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { uploadPhoto } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
-import { getFileUrl } from "@/lib/api";
 
 export function useUpload() {
   const [uploading, setUploading] = useState(false);
@@ -15,8 +14,7 @@ export function useUpload() {
     setError(null);
     try {
       const res = await uploadPhoto(file);
-      const photoUrl = getFileUrl(`/api/files/photos/${res.photo_id}/resized.jpg`);
-      setPhoto(res.photo_id, photoUrl);
+      setPhoto(res.photo_id, res.resized_url);
       return res;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Upload failed";

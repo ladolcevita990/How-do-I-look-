@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { getFileUrl } from "@/lib/api";
 import type { GarmentCategory, GarmentResponse } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 
@@ -35,9 +34,7 @@ export default function GarmentCard({
     isInOutfit = outfitSlots.shoes?.id === garment.id;
   }
 
-  const imageUrl = garment.processed_url
-    ? getFileUrl(garment.processed_url)
-    : "/placeholder.png";
+  const imageUrl = garment.processed_url || "/placeholder.png";
 
   const handleAdd = () => {
     if (garment.category === "accessories") {

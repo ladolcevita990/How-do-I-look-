@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ensureSession, getSessionState } from "@/lib/api";
+import { getSessionState } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
+import { getOrCreateSessionId, isSupabaseConfigured } from "@/lib/supabase";
 
 /**
- * Ensures the backend session cookie is set on first visit and rehydrates
- * the store with whatever this browser has saved — photo, closet, outfits —
- * so returning users see their lookbook immediately.
+ * On first load, generate (or read) the local session id, pull whatever
+ * this browser has saved in Supabase — photo, closet, outfits — and hydrate
+ * the Zustand store so returning visitors see their lookbook immediately.
  */
 export default function SessionProvider({
   children,
@@ -21,8 +22,20 @@ export default function SessionProvider({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const sessionId = getOrCreateSessionId();
+      if (!isSupabaseConfigured()) {
+        // Let the rest of the app render even without Supabase; it just
+        // won't persist anything. Useful for local dev / CI.
+        if (cancelled) return;
+        hydrate({
+          session_id: sessionId,
+          photo: null,
+          garments: [],
+          outfits: [],
+        });
+        return;
+      }
       try {
-        await ensureSession();
         const state = await getSessionState();
         if (cancelled) return;
         hydrate(state);
@@ -35,7 +48,13 @@ export default function SessionProvider({
           setTimeout(() => setWelcomeBack(false), 3500);
         }
       } catch {
-        // Silent fail — the rest of the app still works with a transient id.
+        if (cancelled) return;
+        hydrate({
+          session_id: sessionId,
+          photo: null,
+          garments: [],
+          outfits: [],
+        });
       }
     })();
     return () => {
