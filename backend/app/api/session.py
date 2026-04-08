@@ -23,12 +23,15 @@ router = APIRouter()
 
 
 def _set_cookie(response: Response, signed_value: str) -> None:
+    # Cross-origin deploys (e.g. Vercel frontend + Render backend) require
+    # SameSite=None, and browsers reject SameSite=None without Secure. The
+    # settings default to ``lax`` + ``secure=False`` for same-origin local dev.
     response.set_cookie(
         settings.session_cookie_name,
         value=signed_value,
         max_age=settings.session_cookie_max_age,
         httponly=True,
-        samesite="lax",
+        samesite=settings.session_cookie_samesite,
         secure=settings.session_cookie_secure,
         path="/",
     )

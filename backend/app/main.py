@@ -20,9 +20,12 @@ async def lifespan(app: FastAPI):
     init_db()
     try:
         ensure_bucket()
-        logger.info("S3 bucket ready")
+        logger.info(f"Storage ready ({settings.storage_backend})")
     except Exception as e:
-        logger.warning(f"Could not connect to S3: {e}. Storage operations will fail until S3 is available.")
+        logger.warning(
+            f"Could not initialize storage: {e}. "
+            "Storage operations will fail until it is available."
+        )
     yield
     logger.info("Shutting down...")
 
@@ -36,7 +39,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:3000"],
+    allow_origins=settings.cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,13 +50,24 @@ app.include_router(api_router)
 
 @app.get("/api/files/{path:path}")
 async def serve_file(path: str):
-    """Serve files from S3 storage."""
+    """Serve an uploaded file from whichever storage backend is active."""
     try:
         data = download_file(path)
-        content_type = "image/png" if path.endswith(".png") else "image/jpeg"
-        return Response(content=data, media_type=content_type)
+    except FileNotFoundError:
+        return Response(status_code=404, content="File not found")
     except Exception:
         return Response(status_code=404, content="File not found")
+    if path.endswith(".png"):
+        content_type = "image/png"
+    elif path.endswith(".webp"):
+        content_type = "image/webp"
+    else:
+        content_type = "image/jpeg"
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @app.get("/api/health")
